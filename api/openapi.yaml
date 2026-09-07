@@ -1,0 +1,918 @@
+openapi: 3.1.0
+
+info:
+  title: Avito Kitchen API
+  description: |
+    REST API MVP-сервиса «Авито.Кухня».
+
+    API предоставляет пользовательские методы для просмотра заведений,
+    меню и заказов, а также партнёрские методы для интеграции заведений.
+  version: 0.1.0
+  license:
+    name: Unlicensed
+
+servers:
+  - url: http://localhost:8080
+    description: Локальное окружение
+
+security: []
+
+tags:
+  - name: Health
+    description: Проверка состояния приложения
+  - name: Restaurants
+    description: Пользовательское API заведений и меню
+  - name: Orders
+    description: Пользовательское API заказов
+  - name: Partner menu
+    description: Партнёрское API управления меню
+  - name: Partner orders
+    description: Партнёрское API обработки заказов
+
+paths:
+  /healthz:
+    get:
+      tags:
+        - Health
+      summary: Проверить состояние процесса
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Приложение работает
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /readyz:
+    get:
+      tags:
+        - Health
+      summary: Проверить готовность приложения
+      description: Проверяет доступность зависимостей, включая PostgreSQL.
+      operationId: readinessCheck
+      responses:
+        "200":
+          description: Приложение готово принимать запросы
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/restaurants:
+    get:
+      tags:
+        - Restaurants
+      summary: Получить список заведений
+      description: Возвращает только активные заведения.
+      operationId: listRestaurants
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Список заведений
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestaurantListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/restaurants/{restaurantId}:
+    get:
+      tags:
+        - Restaurants
+      summary: Получить заведение
+      operationId: getRestaurant
+      parameters:
+        - $ref: "#/components/parameters/RestaurantId"
+      responses:
+        "200":
+          description: Информация о заведении
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Restaurant"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/restaurants/{restaurantId}/menu:
+    get:
+      tags:
+        - Restaurants
+      summary: Получить меню заведения
+      description: |
+        Возвращает позиции меню выбранного активного заведения.
+        Ответ содержит доступные и временно недоступные позиции.
+      operationId: listRestaurantMenu
+      parameters:
+        - $ref: "#/components/parameters/RestaurantId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Меню заведения
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/orders:
+    get:
+      tags:
+        - Orders
+      summary: Получить заказы пользователя
+      operationId: listUserOrders
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/OrderStatusFilter"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Список заказов пользователя
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    post:
+      tags:
+        - Orders
+      summary: Создать заказ
+      description: |
+        Создаёт заказ из позиций меню одного заведения.
+
+        Если запрос с теми же X-User-ID и Idempotency-Key уже был
+        успешно обработан, сервис возвращает ранее созданный заказ.
+      operationId: createOrder
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+      responses:
+        "200":
+          description: |
+            Ранее созданный заказ для повторного идемпотентного запроса
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "201":
+          description: Заказ создан
+          headers:
+            Location:
+              description: URL созданного заказа
+              schema:
+                type: string
+                example: /api/v1/orders/550e8400-e29b-41d4-a716-446655440000
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/orders/{orderId}:
+    get:
+      tags:
+        - Orders
+      summary: Получить заказ
+      description: |
+        Возвращает заказ, если переданный X-User-ID совпадает
+        с идентификатором пользователя в заказе.
+      operationId: getOrder
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Информация о заказе
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/partner/menu:
+    put:
+      tags:
+        - Partner menu
+      summary: Синхронизировать меню заведения
+      description: |
+        Создаёт новые позиции и обновляет существующие по external_id.
+
+        Позиции, отсутствующие в переданном полном меню, становятся
+        недоступными, но не удаляются из базы данных.
+
+        Заведение определяется по X-API-Key.
+      operationId: syncPartnerMenu
+      security:
+        - PartnerApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncMenuRequest"
+      responses:
+        "200":
+          description: Меню синхронизировано
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuSyncResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/partner/menu-items/{externalId}/availability:
+    patch:
+      tags:
+        - Partner menu
+      summary: Изменить доступность позиции меню
+      description: |
+        Изменяет доступность блюда, принадлежащего авторизованному заведению.
+      operationId: updateMenuItemAvailability
+      security:
+        - PartnerApiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ExternalMenuItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAvailabilityRequest"
+      responses:
+        "200":
+          description: Доступность обновлена
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuItem"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/partner/orders:
+    get:
+      tags:
+        - Partner orders
+      summary: Получить заказы заведения
+      description: |
+        Возвращает заказы заведения, определённого по X-API-Key.
+        По умолчанию возвращаются новые заказы в статусе created.
+      operationId: listPartnerOrders
+      security:
+        - PartnerApiKey: []
+      parameters:
+        - $ref: "#/components/parameters/PartnerOrderStatusFilter"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Список заказов заведения
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/partner/orders/{orderId}/status:
+    patch:
+      tags:
+        - Partner orders
+      summary: Изменить статус заказа
+      description: |
+        Изменяет статус заказа, принадлежащего авторизованному заведению.
+
+        Допустимость перехода проверяется основным сервисом.
+      operationId: updatePartnerOrderStatus
+      security:
+        - PartnerApiKey: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrderStatusRequest"
+      responses:
+        "200":
+          description: Статус заказа обновлён
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+components:
+  securitySchemes:
+    PartnerApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API-ключ заведения
+
+  parameters:
+    UserId:
+      name: X-User-ID
+      in: header
+      required: true
+      description: |
+        Идентификатор пользователя основной платформы.
+        Не является механизмом аутентификации в рамках MVP.
+      schema:
+        type: string
+        format: uuid
+
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Уникальный ключ попытки создания заказа
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+
+    RestaurantId:
+      name: restaurantId
+      in: path
+      required: true
+      description: Внутренний идентификатор заведения
+      schema:
+        type: string
+        format: uuid
+
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      description: Идентификатор заказа
+      schema:
+        type: string
+        format: uuid
+
+    ExternalMenuItemId:
+      name: externalId
+      in: path
+      required: true
+      description: Идентификатор позиции в системе заведения
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+
+    OrderStatusFilter:
+      name: status
+      in: query
+      required: false
+      description: Фильтр по статусу заказа
+      schema:
+        $ref: "#/components/schemas/OrderStatus"
+
+    PartnerOrderStatusFilter:
+      name: status
+      in: query
+      required: false
+      description: Фильтр заказов заведения по статусу
+      schema:
+        allOf:
+          - $ref: "#/components/schemas/OrderStatus"
+        default: created
+
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Максимальное количество элементов в ответе
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+    Offset:
+      name: offset
+      in: query
+      required: false
+      description: Количество пропускаемых элементов
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          example: ok
+
+    RestaurantStatus:
+      type: string
+      enum:
+        - active
+        - inactive
+
+    Restaurant:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Пицца у Лены
+        status:
+          $ref: "#/components/schemas/RestaurantStatus"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RestaurantListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - total
+        - limit
+        - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Restaurant"
+        total:
+          type: integer
+          minimum: 0
+          description: Общее количество активных заведений
+        limit:
+          type: integer
+          minimum: 1
+        offset:
+          type: integer
+          minimum: 0
+
+    MenuItem:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - restaurant_id
+        - external_id
+        - name
+        - price_kopecks
+        - is_available
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        restaurant_id:
+          type: string
+          format: uuid
+        external_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Идентификатор блюда в системе заведения
+          example: pizza-margherita
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Маргарита
+        description:
+          type: string
+          maxLength: 2000
+          example: Пицца с томатами, моцареллой и базиликом
+        price_kopecks:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Стоимость блюда в копейках
+          example: 49900
+        is_available:
+          type: boolean
+          description: Доступно ли блюдо для заказа
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    MenuResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - restaurant
+        - items
+        - total
+        - limit
+        - offset
+      properties:
+        restaurant:
+          $ref: "#/components/schemas/Restaurant"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MenuItem"
+        total:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+        offset:
+          type: integer
+          minimum: 0
+
+    OrderStatus:
+      type: string
+      enum:
+        - created
+        - accepted
+        - rejected
+        - preparing
+        - ready
+
+    CreateOrderItem:
+      type: object
+      additionalProperties: false
+      required:
+        - menu_item_id
+        - quantity
+      properties:
+        menu_item_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 100
+          example: 2
+
+    CreateOrderRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - restaurant_id
+        - delivery_address
+        - items
+      properties:
+        restaurant_id:
+          type: string
+          format: uuid
+        delivery_address:
+          type: string
+          minLength: 5
+          maxLength: 1000
+          example: Батуми, улица Пушкина, дом 10, квартира 15
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: |
+            Позиции одного заведения. Один menu_item_id не должен
+            встречаться в запросе несколько раз.
+          items:
+            $ref: "#/components/schemas/CreateOrderItem"
+
+    OrderItem:
+      type: object
+      additionalProperties: false
+      required:
+        - menu_item_id
+        - item_name
+        - unit_price_kopecks
+        - quantity
+        - total_price_kopecks
+      properties:
+        menu_item_id:
+          type: string
+          format: uuid
+        item_name:
+          type: string
+          example: Маргарита
+        unit_price_kopecks:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 49900
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+        total_price_kopecks:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Стоимость позиции с учётом количества
+          example: 99800
+
+    Order:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - restaurant_id
+        - user_id
+        - status
+        - total_price_kopecks
+        - delivery_address
+        - items
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        restaurant_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        total_price_kopecks:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Итоговая стоимость заказа
+          example: 99800
+        delivery_address:
+          type: string
+          example: Батуми, улица Пушкина, дом 10, квартира 15
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    OrderListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - total
+        - limit
+        - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        total:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+        offset:
+          type: integer
+          minimum: 0
+
+    PartnerMenuItemInput:
+      type: object
+      additionalProperties: false
+      required:
+        - external_id
+        - name
+        - price_kopecks
+        - is_available
+      properties:
+        external_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Идентификатор блюда в системе заведения
+          example: pizza-margherita
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Маргарита
+        description:
+          type: string
+          maxLength: 2000
+          example: Пицца с томатами, моцареллой и базиликом
+        price_kopecks:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 49900
+        is_available:
+          type: boolean
+          example: true
+
+    SyncMenuRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          maxItems: 1000
+          description: |
+            Полное актуальное меню заведения. Позиции, отсутствующие
+            в списке, становятся недоступными.
+          items:
+            $ref: "#/components/schemas/PartnerMenuItemInput"
+
+    MenuSyncResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - restaurant_id
+        - items
+        - updated_at
+      properties:
+        restaurant_id:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MenuItem"
+        updated_at:
+          type: string
+          format: date-time
+
+    UpdateAvailabilityRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - is_available
+      properties:
+        is_available:
+          type: boolean
+          example: false
+
+    PartnerOrderStatus:
+      type: string
+      description: Статус, который может установить заведение
+      enum:
+        - accepted
+        - rejected
+        - preparing
+        - ready
+
+    UpdateOrderStatusRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          $ref: "#/components/schemas/PartnerOrderStatus"
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Машиночитаемый код ошибки
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          description: Описание ошибки
+          example: Некорректные параметры запроса
+        details:
+          type: object
+          additionalProperties: true
+          description: Дополнительная информация об ошибке
+
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    Unauthorized:
+      description: Отсутствует или недействителен партнёрский API-ключ
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    NotFound:
+      description: Ресурс не найден
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    Conflict:
+      description: Запрос конфликтует с текущим состоянием системы
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    ServiceUnavailable:
+      description: Приложение не готово принимать запросы
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    InternalServerError:
+      description: Внутренняя ошибка сервера
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
