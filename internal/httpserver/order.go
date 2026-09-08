@@ -154,7 +154,6 @@ func (h *OrderHandler) Get(
 	writeJSON(writer, http.StatusOK, newOrderResponse(order))
 }
 
-// Cancel отменяет заказ пользователя, пока заведение его не приняло.
 func (h *OrderHandler) Cancel(
 	writer http.ResponseWriter,
 	request *http.Request,

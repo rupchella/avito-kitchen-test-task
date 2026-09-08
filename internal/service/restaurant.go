@@ -92,8 +92,6 @@ func (s *RestaurantService) Menu(
 	return restaurant, items, total, nil
 }
 
-// SearchMenuItems ищет блюда по всей площадке, а не внутри одного
-// заведения: так пользователь находит товар, не открывая меню подряд.
 func (s *RestaurantService) SearchMenuItems(
 	ctx context.Context,
 	search string,

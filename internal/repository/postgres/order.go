@@ -219,7 +219,6 @@ func (r *OrderRepository) ListByRestaurant(
 	return r.list(ctx, filter, restaurantID, statusFilterValue(status), limit, offset)
 }
 
-// UpdateStatus переводит заказ заведения в новый статус.
 func (r *OrderRepository) UpdateStatus(
 	ctx context.Context,
 	orderID string,
@@ -243,8 +242,6 @@ func (r *OrderRepository) UpdateStatus(
 	)
 }
 
-// CancelByUser отменяет заказ по требованию пользователя.
-// Заказ ищется вместе с владельцем, поэтому чужой заказ отменить нельзя.
 func (r *OrderRepository) CancelByUser(
 	ctx context.Context,
 	orderID string,
@@ -267,9 +264,6 @@ func (r *OrderRepository) CancelByUser(
 	)
 }
 
-// changeStatus выполняет переход статуса под блокировкой строки:
-// текущий статус читается через FOR UPDATE, поэтому два параллельных
-// запроса не могут выполнить два перехода одновременно.
 func (r *OrderRepository) changeStatus(
 	ctx context.Context,
 	lockQuery string,

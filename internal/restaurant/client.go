@@ -64,7 +64,6 @@ type menuSyncResponse struct {
 	Items        []MenuItem `json:"items"`
 }
 
-// APIError описывает неуспешный ответ партнёрского API.
 type APIError struct {
 	StatusCode int
 	Code       string
@@ -197,7 +196,6 @@ func (c *Client) do(
 		reader = bytes.NewReader(encoded)
 	}
 
-	// Адрес платформы задаётся конфигурацией сервиса, а не запросом.
 	request, err := http.NewRequestWithContext( //nolint:gosec // адрес из конфигурации
 		ctx,
 		method,

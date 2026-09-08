@@ -61,8 +61,6 @@ func parsePagination(request *http.Request) (pagination, error) {
 	return result, nil
 }
 
-// parseSearch разбирает необязательный поисковый запрос.
-// Пустое значение означает «без фильтра».
 func parseSearch(request *http.Request) (string, error) {
 	search := strings.TrimSpace(request.URL.Query().Get("search"))
 

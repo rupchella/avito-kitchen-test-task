@@ -160,8 +160,6 @@ func (s *OrderService) Get(
 	return order, nil
 }
 
-// Cancel отменяет заказ пользователя. Разрешено только пока заведение
-// не приняло заказ: дальше отмену согласуют с кухней.
 func (s *OrderService) Cancel(
 	ctx context.Context,
 	orderID string,

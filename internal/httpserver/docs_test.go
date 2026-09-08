@@ -61,8 +61,6 @@ func TestOpenAPISpecServesDocument(t *testing.T) {
 	}
 }
 
-// Без файла спецификации документация не публикуется:
-// сервис должен работать и без неё.
 func TestRouterDisablesDocsWithoutSpec(t *testing.T) {
 	tests := []struct {
 		name       string

@@ -74,7 +74,6 @@ func TestRestaurantHandlerSearchMenuItems(t *testing.T) {
 
 	item := response.Items[0]
 
-	// Найденная позиция бесполезна без заведения, в котором её заказывают.
 	if item.Restaurant.Name != "AvitoCookRestaurant" {
 		t.Errorf("unexpected restaurant name: %q", item.Restaurant.Name)
 	}

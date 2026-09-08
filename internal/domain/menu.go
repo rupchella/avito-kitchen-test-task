@@ -14,8 +14,6 @@ type MenuItem struct {
 	UpdatedAt    time.Time
 }
 
-// MenuSearchItem — позиция меню в результатах поиска по всей площадке:
-// вместе с ней возвращается название заведения, где её можно заказать.
 type MenuSearchItem struct {
 	MenuItem
 

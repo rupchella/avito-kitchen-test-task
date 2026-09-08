@@ -150,8 +150,6 @@ func (h *RestaurantHandler) Menu(
 	})
 }
 
-// SearchMenuItems отдаёт блюда со всей площадки: пользователь ищет
-// товар, а не заведение.
 func (h *RestaurantHandler) SearchMenuItems(
 	writer http.ResponseWriter,
 	request *http.Request,

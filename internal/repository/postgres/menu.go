@@ -274,9 +274,6 @@ func (r *MenuRepository) SetAvailability(
 	return items[0], nil
 }
 
-// Search ищет доступные позиции по всей площадке: только у активных
-// заведений и только те, что сейчас можно заказать. Пустой запрос
-// возвращает весь доступный каталог.
 func (r *MenuRepository) Search(
 	ctx context.Context,
 	search string,
@@ -364,8 +361,6 @@ func (r *MenuRepository) Search(
 	return items, total, nil
 }
 
-// searchFilterValue превращает пустой запрос в NULL, чтобы условие
-// поиска в SQL отключалось целиком.
 func searchFilterValue(search string) *string {
 	if search == "" {
 		return nil
