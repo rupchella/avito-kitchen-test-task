@@ -8,6 +8,7 @@ import (
 type RouterDependencies struct {
 	Pinger           Pinger
 	ReadinessTimeout time.Duration
+	OpenAPISpec      []byte
 	Restaurants      *RestaurantHandler
 	Orders           *OrderHandler
 	Partner          *PartnerHandler
@@ -21,6 +22,14 @@ func NewRouter(dependencies RouterDependencies) *http.ServeMux {
 		"GET /readyz",
 		Readiness(dependencies.Pinger, dependencies.ReadinessTimeout),
 	)
+
+	if len(dependencies.OpenAPISpec) > 0 {
+		mux.HandleFunc("GET /docs", SwaggerUI)
+		mux.HandleFunc(
+			"GET /openapi.yaml",
+			OpenAPISpec(dependencies.OpenAPISpec),
+		)
+	}
 
 	mux.HandleFunc(
 		"GET /api/v1/restaurants",

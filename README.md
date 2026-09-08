@@ -57,6 +57,15 @@ curl -s localhost:8081/healthz
 {"status":"ok"}
 ```
 
+Интерактивная документация — Swagger UI со всеми ручками:
+
+```
+http://localhost:8080/docs
+```
+
+Ручки можно дёргать прямо оттуда, кнопкой «Try it out». Сама спецификация
+отдаётся по `http://localhost:8080/openapi.yaml`.
+
 Остановка вместе с данными:
 
 ```bash
@@ -238,7 +247,8 @@ curl -s -X PATCH localhost:8081/api/v1/menu-items/pizza-margherita/availability 
 
 ## API
 
-Полная спецификация: [api/openapi.yaml](api/openapi.yaml) (OpenAPI 3.1).
+Полная спецификация: [api/openapi.yaml](api/openapi.yaml) (OpenAPI 3.1),
+на запущенном приложении — `http://localhost:8080/docs`.
 
 ### Пользовательское API
 
@@ -463,6 +473,7 @@ erDiagram
 |---|---|---|
 | `KITCHEN_HTTP_ADDR` | `:8080` | Адрес HTTP-сервера |
 | `DATABASE_URL` | `postgres://kitchen:kitchen@localhost:5432/kitchen?sslmode=disable` | DSN PostgreSQL |
+| `OPENAPI_PATH` | `api/openapi.yaml` | Спецификация для `/docs`; если файла нет, документация отключается |
 
 `restaurant`:
 

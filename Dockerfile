@@ -23,6 +23,7 @@ FROM alpine:3.21 AS service
 RUN apk add --no-cache ca-certificates
 
 COPY --from=service-builder /out/app /usr/local/bin/app
+COPY --from=service-builder /src/api/openapi.yaml /api/openapi.yaml
 
 USER nobody
 

@@ -67,9 +67,19 @@ func run(logger *slog.Logger) error {
 		orderRepository,
 	)
 
+	openAPISpec, err := os.ReadFile(cfg.OpenAPIPath)
+	if err != nil {
+		logger.Warn(
+			"API documentation is disabled",
+			"path", cfg.OpenAPIPath,
+			"error", err,
+		)
+	}
+
 	router := httpserver.NewRouter(httpserver.RouterDependencies{
 		Pinger:           pool,
 		ReadinessTimeout: cfg.ReadinessTimeout,
+		OpenAPISpec:      openAPISpec,
 		Restaurants: httpserver.NewRestaurantHandler(
 			restaurantService,
 			logger,
