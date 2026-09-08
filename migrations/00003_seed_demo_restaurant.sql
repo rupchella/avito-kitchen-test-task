@@ -3,7 +3,7 @@
 INSERT INTO restaurants (id, name, status)
 VALUES (
     'a1b2c3d4-0000-4000-8000-000000000001',
-    'Пицца у Лены',
+    'AvitoCookRestaurant',
     'active'
 );
 
