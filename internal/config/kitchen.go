@@ -7,7 +7,7 @@ import (
 
 const (
 	defaultKitchenHTTPAddress = ":8080"
-	defaultDatabaseURL        = "postgres://kitchen:kitchen@localhost:5432/kitchen?sslmode=disable"
+	defaultDatabaseURL        = "postgres://kitchen:kitchen@localhost:5432/kitchen?sslmode=disable" //nolint:gosec // не секрет: локальные учётные данные
 )
 
 type Kitchen struct {

@@ -1,0 +1,8 @@
+.git
+.idea
+docs
+*.md
+!go.mod
+compose.yaml
+Dockerfile
+.dockerignore

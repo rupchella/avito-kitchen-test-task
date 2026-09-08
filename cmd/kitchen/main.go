@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,6 +11,8 @@ import (
 	"github.com/talense-tasks/backend-trainee-assignment-autumn-2026-flow-2-rupchella-a6429326/internal/config"
 	"github.com/talense-tasks/backend-trainee-assignment-autumn-2026-flow-2-rupchella-a6429326/internal/httpserver"
 	"github.com/talense-tasks/backend-trainee-assignment-autumn-2026-flow-2-rupchella-a6429326/internal/postgres"
+	postgresrepository "github.com/talense-tasks/backend-trainee-assignment-autumn-2026-flow-2-rupchella-a6429326/internal/repository/postgres"
+	"github.com/talense-tasks/backend-trainee-assignment-autumn-2026-flow-2-rupchella-a6429326/internal/service"
 )
 
 func main() {
@@ -46,14 +47,41 @@ func run(logger *slog.Logger) error {
 	}
 	defer pool.Close()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", httpserver.Liveness)
-	mux.HandleFunc(
-		"GET /readyz",
-		httpserver.Readiness(pool, cfg.ReadinessTimeout),
+	restaurantRepository := postgresrepository.NewRestaurantRepository(pool)
+	menuRepository := postgresrepository.NewMenuRepository(pool)
+	orderRepository := postgresrepository.NewOrderRepository(pool)
+	integrationRepository := postgresrepository.NewIntegrationRepository(pool)
+
+	restaurantService := service.NewRestaurantService(
+		restaurantRepository,
+		menuRepository,
+	)
+	orderService := service.NewOrderService(
+		orderRepository,
+		menuRepository,
+		restaurantRepository,
+	)
+	partnerService := service.NewPartnerService(
+		integrationRepository,
+		menuRepository,
+		orderRepository,
 	)
 
-	server := httpserver.New(cfg.HTTPAddress, mux)
+	router := httpserver.NewRouter(httpserver.RouterDependencies{
+		Pinger:           pool,
+		ReadinessTimeout: cfg.ReadinessTimeout,
+		Restaurants: httpserver.NewRestaurantHandler(
+			restaurantService,
+			logger,
+		),
+		Orders:  httpserver.NewOrderHandler(orderService, logger),
+		Partner: httpserver.NewPartnerHandler(partnerService, logger),
+	})
+
+	server := httpserver.New(
+		cfg.HTTPAddress,
+		httpserver.LogRequests(logger, router),
+	)
 
 	logger.Info(
 		"starting kitchen API",

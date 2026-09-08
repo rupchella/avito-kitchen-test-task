@@ -495,7 +495,7 @@ components:
         name:
           type: string
           minLength: 1
-          maxLength: 255
+          maxLength: 200
           example: Пицца у Лены
         status:
           $ref: "#/components/schemas/RestaurantStatus"
