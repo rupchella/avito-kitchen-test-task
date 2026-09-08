@@ -64,6 +64,18 @@ curl -s localhost:8080/readyz
 curl -s localhost:8081/healthz
 ```
 
+Оба отвечают одинаково — это значит, что `kitchen` достучался до базы,
+а `restaurant` поднялся:
+
+```json
+{"status":"ok"}
+```
+
+Если `kitchen` возвращает `503` и `{"code":"service_unavailable"}` —
+база ещё не готова или миграции не применились, смотрите
+`docker compose ps -a`: контейнер `migrator` должен быть в состоянии
+`exited (0)`.
+
 Остановка вместе с данными:
 
 ```bash
@@ -83,12 +95,66 @@ docker compose down -v
 curl -s localhost:8080/api/v1/restaurants
 ```
 
+```json
+{
+  "items": [
+    {
+      "id": "a1b2c3d4-0000-4000-8000-000000000001",
+      "name": "Пицца у Лены",
+      "status": "active",
+      "created_at": "2026-09-08T14:48:21.748464Z",
+      "updated_at": "2026-09-08T14:48:21.748464Z"
+    }
+  ],
+  "total": 1,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+Пустой список означает, что заведение не создалось миграцией.
+
 ```bash
 curl -s localhost:8080/api/v1/restaurants/a1b2c3d4-0000-4000-8000-000000000001/menu
 ```
 
-В ответе меню возьмите `id` доступной позиции (`"is_available": true`) —
-он понадобится для заказа.
+Ответ содержит заведение и его меню (ниже показана одна позиция из шести):
+
+```json
+{
+  "restaurant": {
+    "id": "a1b2c3d4-0000-4000-8000-000000000001",
+    "name": "Пицца у Лены",
+    "status": "active",
+    "created_at": "2026-09-08T14:48:21.748464Z",
+    "updated_at": "2026-09-08T14:48:21.748464Z"
+  },
+  "items": [
+    {
+      "id": "1619a0ef-1b47-49e4-84a8-0b88ebb936bf",
+      "restaurant_id": "a1b2c3d4-0000-4000-8000-000000000001",
+      "external_id": "pizza-margherita",
+      "name": "Пицца Маргарита",
+      "description": "Томаты, моцарелла, базилик",
+      "price_kopecks": 49900,
+      "is_available": true,
+      "created_at": "2026-09-08T14:48:28.249988Z",
+      "updated_at": "2026-09-08T14:48:28.249988Z"
+    }
+  ],
+  "total": 6,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+Позиций должно быть шесть, из них тирамису — с `"is_available": false`.
+Идентификаторы у вас будут другими: их генерирует база при первой
+синхронизации меню. Если меню пустое, подождите такт опроса (5 секунд):
+заведение ещё не успело его опубликовать.
+
+Возьмите `id` доступной позиции (`"is_available": true`) — он понадобится
+для заказа.
 
 **2. Пользователь создаёт заказ**
 
@@ -106,9 +172,40 @@ curl -s -X POST localhost:8080/api/v1/orders \
   }'
 ```
 
-Ответ — `201 Created` с заказом в статусе `created` и итоговой стоимостью.
-Повторный запрос с тем же `Idempotency-Key` вернёт `200 OK` и тот же заказ,
-а не создаст второй.
+Ответ — `201 Created`, заголовок `Location` с адресом заказа:
+
+```json
+{
+  "id": "84f51042-388e-40d1-bc46-f0e23e8ba07b",
+  "restaurant_id": "a1b2c3d4-0000-4000-8000-000000000001",
+  "user_id": "11111111-1111-4111-8111-111111111111",
+  "status": "created",
+  "total_price_kopecks": 99800,
+  "delivery_address": "Батуми, улица Пушкина, дом 10, квартира 15",
+  "items": [
+    {
+      "menu_item_id": "1619a0ef-1b47-49e4-84a8-0b88ebb936bf",
+      "item_name": "Пицца Маргарита",
+      "unit_price_kopecks": 49900,
+      "quantity": 2,
+      "total_price_kopecks": 99800
+    }
+  ],
+  "created_at": "2026-09-08T14:49:03.416107Z",
+  "updated_at": "2026-09-08T14:49:03.416107Z"
+}
+```
+
+Название и цена скопированы в позицию заказа — дальнейшие изменения меню
+на этот заказ уже не влияют.
+
+Повторите тот же запрос — вернётся `200 OK` и **тот же** `id`, второй заказ
+не создастся. Измените в теле `quantity` и повторите ещё раз, не меняя
+`Idempotency-Key`, — получите `409`:
+
+```json
+{"code":"idempotency_conflict","message":"idempotency key was used for another order"}
+```
 
 **3. Заведение обрабатывает заказ**
 
@@ -125,7 +222,9 @@ curl -s localhost:8080/api/v1/orders/<ID заказа> \
   -H 'X-User-ID: 11111111-1111-4111-8111-111111111111'
 ```
 
-Через ~15 секунд заказ дойдёт до `ready`. Ход обработки виден в логах:
+Поле `status` меняется каждые 5 секунд: `created` → `accepted` →
+`preparing` → `ready`, то есть примерно через 15 секунд заказ готов.
+Ход обработки виден в логах:
 
 ```bash
 docker compose logs -f restaurant
@@ -142,7 +241,28 @@ curl -s -X PATCH localhost:8081/api/v1/menu-items/pizza-margherita/availability 
   -d '{"is_available": false}'
 ```
 
-После этого заказ с этой позицией вернёт `409 menu_item_unavailable`.
+Ответ — позиция уже с новым флагом:
+
+```json
+{
+  "id": "1619a0ef-1b47-49e4-84a8-0b88ebb936bf",
+  "restaurant_id": "a1b2c3d4-0000-4000-8000-000000000001",
+  "external_id": "pizza-margherita",
+  "name": "Пицца Маргарита",
+  "description": "Томаты, моцарелла, базилик",
+  "price_kopecks": 49900,
+  "is_available": false
+}
+```
+
+Теперь заказ этой позиции (не забудьте новый `Idempotency-Key`) вернёт
+`409`:
+
+```json
+{"code":"menu_item_unavailable","message":"menu item is not available"}
+```
+
+Вернуть блюдо в продажу — тем же запросом с `{"is_available": true}`.
 
 ## API
 
