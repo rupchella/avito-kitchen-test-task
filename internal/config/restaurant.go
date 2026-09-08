@@ -9,7 +9,7 @@ const (
 	defaultRestaurantHTTPAddress = ":8081"
 	defaultKitchenBaseURL        = "http://localhost:8080"
 	defaultRestaurantAPIKey      = "demo-restaurant-key"
-	defaultPollInterval          = 5 * time.Second
+	defaultPollInterval          = 15 * time.Second
 
 	defaultMaxOrderKopecks = 500_000
 )

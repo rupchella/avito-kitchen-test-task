@@ -160,9 +160,10 @@ docker compose down -v
 Заказ дороже `RESTAURANT_MAX_ORDER_KOPECKS` (по умолчанию 5000 ₽) кухня
 отклоняет: `created → rejected`.
 
-Следите через `GET /api/v1/orders/{orderId}` с тем же `X-User-ID`: поле
-`status` меняется каждые 5 секунд, примерно через 15 секунд заказ готов.
-Ход обработки виден в логах:
+Следите через `GET /api/v1/orders/{orderId}` с тем же `X-User-ID`. Поле
+`status` меняется раз в 15 секунд, до `ready` заказ доходит за 30–45 секунд —
+в зависимости от того, в какую часть такта он попал. Ход обработки виден
+в логах:
 
 ```bash
 docker compose logs -f restaurant
@@ -438,7 +439,7 @@ erDiagram
 | `RESTAURANT_HTTP_ADDR` | `:8081` | Адрес HTTP-сервера |
 | `KITCHEN_BASE_URL` | `http://localhost:8080` | Адрес платформы |
 | `RESTAURANT_API_KEY` | `demo-restaurant-key` | Партнёрский ключ |
-| `RESTAURANT_POLL_INTERVAL` | `5s` | Период опроса заказов |
+| `RESTAURANT_POLL_INTERVAL` | `15s` | Период опроса заказов |
 | `RESTAURANT_MAX_ORDER_KOPECKS` | `500000` | Порог отклонения заказа |
 
 ## Разработка
