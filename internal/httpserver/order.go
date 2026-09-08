@@ -39,6 +39,12 @@ type OrderService interface {
 		limit int,
 		offset int,
 	) ([]domain.Order, int, error)
+
+	Cancel(
+		ctx context.Context,
+		orderID string,
+		userID string,
+	) (domain.Order, error)
 }
 
 type OrderHandler struct {
@@ -141,6 +147,35 @@ func (h *OrderHandler) Get(
 	order, err := h.service.Get(request.Context(), orderID, userID)
 	if err != nil {
 		writeError(writer, h.logger, "failed to get order", err)
+
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, newOrderResponse(order))
+}
+
+// Cancel отменяет заказ пользователя, пока заведение его не приняло.
+func (h *OrderHandler) Cancel(
+	writer http.ResponseWriter,
+	request *http.Request,
+) {
+	userID, err := parseUserID(request)
+	if err != nil {
+		writeValidationError(writer, err.Error())
+
+		return
+	}
+
+	orderID, err := parseUUIDPathValue(request, "orderId")
+	if err != nil {
+		writeValidationError(writer, err.Error())
+
+		return
+	}
+
+	order, err := h.service.Cancel(request.Context(), orderID, userID)
+	if err != nil {
+		writeError(writer, h.logger, "failed to cancel order", err)
 
 		return
 	}

@@ -466,7 +466,7 @@ func TestOrderHandlerListRejectsUnknownStatus(t *testing.T) {
 	request := newOrderRequest(
 		t,
 		http.MethodGet,
-		"/api/v1/orders?status=delivered",
+		"/api/v1/orders?status=refunded",
 		"",
 	)
 	recorder := httptest.NewRecorder()

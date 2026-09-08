@@ -8,16 +8,24 @@ const (
 	OrderStatusCreated   OrderStatus = "created"
 	OrderStatusAccepted  OrderStatus = "accepted"
 	OrderStatusRejected  OrderStatus = "rejected"
+	OrderStatusCancelled OrderStatus = "cancelled"
 	OrderStatusPreparing OrderStatus = "preparing"
 	OrderStatusReady     OrderStatus = "ready"
+	OrderStatusDelivered OrderStatus = "delivered"
 )
 
 var orderTransitions = map[OrderStatus][]OrderStatus{
-	OrderStatusCreated:   {OrderStatusAccepted, OrderStatusRejected},
+	OrderStatusCreated: {
+		OrderStatusAccepted,
+		OrderStatusRejected,
+		OrderStatusCancelled,
+	},
 	OrderStatusAccepted:  {OrderStatusPreparing},
 	OrderStatusPreparing: {OrderStatusReady},
+	OrderStatusReady:     {OrderStatusDelivered},
 	OrderStatusRejected:  nil,
-	OrderStatusReady:     nil,
+	OrderStatusCancelled: nil,
+	OrderStatusDelivered: nil,
 }
 
 func (status OrderStatus) IsValid() bool {

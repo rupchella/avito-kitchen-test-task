@@ -22,6 +22,8 @@ tags:
     description: Проверка состояния приложения
   - name: Restaurants
     description: Пользовательское API заведений и меню
+  - name: Menu
+    description: Поиск блюд по всей площадке
   - name: Orders
     description: Пользовательское API заказов
   - name: Partner menu
@@ -116,6 +118,7 @@ paths:
       operationId: listRestaurantMenu
       parameters:
         - $ref: "#/components/parameters/RestaurantId"
+        - $ref: "#/components/parameters/Search"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
       responses:
@@ -129,6 +132,34 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/menu-items:
+    get:
+      tags:
+        - Menu
+      summary: Найти блюда по всей площадке
+      description: |
+        Ищет блюда по названию среди всех активных заведений.
+
+        Возвращаются только доступные к заказу позиции, каждая — вместе
+        с заведением, в котором её можно заказать. Запрос без параметра
+        `search` отдаёт весь доступный каталог.
+      operationId: searchMenuItems
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Найденные блюда
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuSearchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "500":
           $ref: "#/components/responses/InternalServerError"
 
@@ -226,6 +257,36 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/orders/{orderId}/cancel:
+    post:
+      tags:
+        - Orders
+      summary: Отменить заказ
+      description: |
+        Отменяет заказ пользователя, пока заведение его не приняло.
+
+        Разрешено только из статуса `created`: после принятия заказа
+        отмену согласуют с заведением, это вне рамок MVP.
+      operationId: cancelOrder
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Заказ отменён
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/InternalServerError"
 
@@ -441,6 +502,18 @@ components:
           - $ref: "#/components/schemas/OrderStatus"
         default: created
 
+    Search:
+      name: search
+      in: query
+      required: false
+      description: |
+        Поиск по названию блюда, регистр не учитывается.
+        Пустое значение означает «без фильтра».
+      schema:
+        type: string
+        maxLength: 100
+        example: пицца
+
     Limit:
       name: limit
       in: query
@@ -607,14 +680,66 @@ components:
           type: integer
           minimum: 0
 
+    RestaurantSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: AvitoCookRestaurant
+
+    MenuSearchItem:
+      allOf:
+        - $ref: "#/components/schemas/MenuItem"
+        - type: object
+          required:
+            - restaurant
+          properties:
+            restaurant:
+              $ref: "#/components/schemas/RestaurantSummary"
+
+    MenuSearchResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - total
+        - limit
+        - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MenuSearchItem"
+        total:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+        offset:
+          type: integer
+          minimum: 0
+
     OrderStatus:
       type: string
+      description: |
+        Статус заказа. Терминальные состояния: `rejected`, `cancelled`,
+        `delivered`.
       enum:
         - created
         - accepted
         - rejected
+        - cancelled
         - preparing
         - ready
+        - delivered
 
     CreateOrderItem:
       type: object
@@ -838,12 +963,15 @@ components:
 
     PartnerOrderStatus:
       type: string
-      description: Статус, который может установить заведение
+      description: |
+        Статус, который может установить заведение.
+        Отмена доступна только пользователю и только до принятия заказа.
       enum:
         - accepted
         - rejected
         - preparing
         - ready
+        - delivered
 
     UpdateOrderStatusRequest:
       type: object

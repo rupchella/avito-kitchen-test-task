@@ -240,7 +240,8 @@ func (h *PartnerHandler) UpdateOrderStatus(
 	if !isPartnerOrderStatus(status) {
 		writeValidationError(
 			writer,
-			"status must be one of: accepted, rejected, preparing, ready",
+			"status must be one of: accepted, rejected, preparing, "+
+				"ready, delivered",
 		)
 
 		return
@@ -353,7 +354,8 @@ func isPartnerOrderStatus(status domain.OrderStatus) bool {
 	case domain.OrderStatusAccepted,
 		domain.OrderStatusRejected,
 		domain.OrderStatusPreparing,
-		domain.OrderStatusReady:
+		domain.OrderStatusReady,
+		domain.OrderStatusDelivered:
 		return true
 	default:
 		return false

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -20,6 +21,7 @@ const (
 	apiKeyHeader         = "X-API-Key" //nolint:gosec // имя заголовка, а не ключ
 
 	maxIdempotencyKeyLength = 128
+	maxSearchLength         = 100
 )
 
 type pagination struct {
@@ -57,6 +59,21 @@ func parsePagination(request *http.Request) (pagination, error) {
 	}
 
 	return result, nil
+}
+
+// parseSearch разбирает необязательный поисковый запрос.
+// Пустое значение означает «без фильтра».
+func parseSearch(request *http.Request) (string, error) {
+	search := strings.TrimSpace(request.URL.Query().Get("search"))
+
+	if len([]rune(search)) > maxSearchLength {
+		return "", fmt.Errorf(
+			"search must contain at most %d characters",
+			maxSearchLength,
+		)
+	}
+
+	return search, nil
 }
 
 func parseUUIDPathValue(

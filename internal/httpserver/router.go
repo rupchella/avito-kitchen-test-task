@@ -43,6 +43,10 @@ func NewRouter(dependencies RouterDependencies) *http.ServeMux {
 		"GET /api/v1/restaurants/{restaurantId}/menu",
 		dependencies.Restaurants.Menu,
 	)
+	mux.HandleFunc(
+		"GET /api/v1/menu-items",
+		dependencies.Restaurants.SearchMenuItems,
+	)
 
 	mux.HandleFunc(
 		"GET /api/v1/orders",
@@ -55,6 +59,10 @@ func NewRouter(dependencies RouterDependencies) *http.ServeMux {
 	mux.HandleFunc(
 		"GET /api/v1/orders/{orderId}",
 		dependencies.Orders.Get,
+	)
+	mux.HandleFunc(
+		"POST /api/v1/orders/{orderId}/cancel",
+		dependencies.Orders.Cancel,
 	)
 
 	partner := dependencies.Partner

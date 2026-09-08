@@ -35,31 +35,48 @@ func NewMenuRepository(pool *pgxpool.Pool) *MenuRepository {
 func (r *MenuRepository) ListByRestaurant(
 	ctx context.Context,
 	restaurantID string,
+	search string,
 	limit int,
 	offset int,
 ) ([]domain.MenuItem, int, error) {
-	const countQuery = `
+	const filter = `
+		WHERE restaurant_id = $1
+			AND ($2::text IS NULL OR name ILIKE '%' || $2 || '%')
+	`
+
+	countQuery := `
 		SELECT COUNT(*)
 		FROM menu_items
-		WHERE restaurant_id = $1
-	`
+	` + filter
 
 	var total int
 
-	if err := r.pool.QueryRow(ctx, countQuery, restaurantID).Scan(&total); err != nil {
+	if err := r.pool.QueryRow(
+		ctx,
+		countQuery,
+		restaurantID,
+		searchFilterValue(search),
+	).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count menu items: %w", err)
 	}
 
 	listQuery := `
 		SELECT` + menuItemColumns + `
 		FROM menu_items
-		WHERE restaurant_id = $1
+	` + filter + `
 		ORDER BY name, id
-		LIMIT $2
-		OFFSET $3
+		LIMIT $3
+		OFFSET $4
 	`
 
-	rows, err := r.pool.Query(ctx, listQuery, restaurantID, limit, offset)
+	rows, err := r.pool.Query(
+		ctx,
+		listQuery,
+		restaurantID,
+		searchFilterValue(search),
+		limit,
+		offset,
+	)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query menu items: %w", err)
 	}
@@ -255,6 +272,106 @@ func (r *MenuRepository) SetAvailability(
 	}
 
 	return items[0], nil
+}
+
+// Search ищет доступные позиции по всей площадке: только у активных
+// заведений и только те, что сейчас можно заказать. Пустой запрос
+// возвращает весь доступный каталог.
+func (r *MenuRepository) Search(
+	ctx context.Context,
+	search string,
+	limit int,
+	offset int,
+) ([]domain.MenuSearchItem, int, error) {
+	const filter = `
+		FROM menu_items
+		JOIN restaurants ON restaurants.id = menu_items.restaurant_id
+		WHERE restaurants.status = 'active'
+			AND menu_items.is_available
+			AND ($1::text IS NULL OR menu_items.name ILIKE '%' || $1 || '%')
+	`
+
+	countQuery := `SELECT COUNT(*) ` + filter
+
+	var total int
+
+	if err := r.pool.QueryRow(
+		ctx,
+		countQuery,
+		searchFilterValue(search),
+	).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count found menu items: %w", err)
+	}
+
+	listQuery := `
+		SELECT
+			menu_items.id::text,
+			menu_items.restaurant_id::text,
+			menu_items.external_id,
+			menu_items.name,
+			menu_items.description,
+			menu_items.price_kopecks,
+			menu_items.is_available,
+			menu_items.created_at,
+			menu_items.updated_at,
+			restaurants.name
+	` + filter + `
+		ORDER BY menu_items.name, menu_items.id
+		LIMIT $2
+		OFFSET $3
+	`
+
+	rows, err := r.pool.Query(
+		ctx,
+		listQuery,
+		searchFilterValue(search),
+		limit,
+		offset,
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("search menu items: %w", err)
+	}
+
+	defer rows.Close()
+
+	items := make([]domain.MenuSearchItem, 0)
+
+	for rows.Next() {
+		var item domain.MenuSearchItem
+
+		if err := rows.Scan(
+			&item.ID,
+			&item.RestaurantID,
+			&item.ExternalID,
+			&item.Name,
+			&item.Description,
+			&item.PriceKopecks,
+			&item.IsAvailable,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+			&item.RestaurantName,
+		); err != nil {
+			return nil, 0, fmt.Errorf("scan found menu item: %w", err)
+		}
+
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate found menu items: %w", err)
+	}
+
+	return items, total, nil
+}
+
+// searchFilterValue превращает пустой запрос в NULL, чтобы условие
+// поиска в SQL отключалось целиком.
+func searchFilterValue(search string) *string {
+	if search == "" {
+		return nil
+	}
+
+	return &search
 }
 
 func scanMenuItems(rows pgx.Rows) ([]domain.MenuItem, error) {

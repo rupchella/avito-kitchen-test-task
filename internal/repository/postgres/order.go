@@ -219,10 +219,62 @@ func (r *OrderRepository) ListByRestaurant(
 	return r.list(ctx, filter, restaurantID, statusFilterValue(status), limit, offset)
 }
 
+// UpdateStatus переводит заказ заведения в новый статус.
 func (r *OrderRepository) UpdateStatus(
 	ctx context.Context,
 	orderID string,
 	restaurantID string,
+	target domain.OrderStatus,
+) (domain.Order, error) {
+	const lockQuery = `
+		SELECT status
+		FROM orders
+		WHERE id = $1
+			AND restaurant_id = $2
+		FOR UPDATE
+	`
+
+	return r.changeStatus(
+		ctx,
+		lockQuery,
+		[]any{orderID, restaurantID},
+		orderID,
+		target,
+	)
+}
+
+// CancelByUser отменяет заказ по требованию пользователя.
+// Заказ ищется вместе с владельцем, поэтому чужой заказ отменить нельзя.
+func (r *OrderRepository) CancelByUser(
+	ctx context.Context,
+	orderID string,
+	userID string,
+) (domain.Order, error) {
+	const lockQuery = `
+		SELECT status
+		FROM orders
+		WHERE id = $1
+			AND user_id = $2
+		FOR UPDATE
+	`
+
+	return r.changeStatus(
+		ctx,
+		lockQuery,
+		[]any{orderID, userID},
+		orderID,
+		domain.OrderStatusCancelled,
+	)
+}
+
+// changeStatus выполняет переход статуса под блокировкой строки:
+// текущий статус читается через FOR UPDATE, поэтому два параллельных
+// запроса не могут выполнить два перехода одновременно.
+func (r *OrderRepository) changeStatus(
+	ctx context.Context,
+	lockQuery string,
+	lockArguments []any,
+	orderID string,
 	target domain.OrderStatus,
 ) (domain.Order, error) {
 	transaction, err := r.pool.Begin(ctx)
@@ -234,22 +286,9 @@ func (r *OrderRepository) UpdateStatus(
 		_ = transaction.Rollback(ctx)
 	}()
 
-	const currentStatusQuery = `
-		SELECT status
-		FROM orders
-		WHERE id = $1
-			AND restaurant_id = $2
-		FOR UPDATE
-	`
-
 	var currentStatus string
 
-	err = transaction.QueryRow(
-		ctx,
-		currentStatusQuery,
-		orderID,
-		restaurantID,
-	).Scan(&currentStatus)
+	err = transaction.QueryRow(ctx, lockQuery, lockArguments...).Scan(&currentStatus)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Order{}, domain.ErrOrderNotFound

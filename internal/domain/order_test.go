@@ -11,13 +11,18 @@ func TestOrderStatusCanTransitionTo(t *testing.T) {
 	}{
 		{"created to accepted", OrderStatusCreated, OrderStatusAccepted, true},
 		{"created to rejected", OrderStatusCreated, OrderStatusRejected, true},
+		{"created to cancelled", OrderStatusCreated, OrderStatusCancelled, true},
 		{"created to preparing", OrderStatusCreated, OrderStatusPreparing, false},
 		{"created to ready", OrderStatusCreated, OrderStatusReady, false},
+		{"accepted to cancelled", OrderStatusAccepted, OrderStatusCancelled, false},
 		{"accepted to preparing", OrderStatusAccepted, OrderStatusPreparing, true},
 		{"accepted to rejected", OrderStatusAccepted, OrderStatusRejected, false},
 		{"preparing to ready", OrderStatusPreparing, OrderStatusReady, true},
-		{"ready is terminal", OrderStatusReady, OrderStatusPreparing, false},
+		{"ready to delivered", OrderStatusReady, OrderStatusDelivered, true},
+		{"ready back to preparing", OrderStatusReady, OrderStatusPreparing, false},
+		{"delivered is terminal", OrderStatusDelivered, OrderStatusReady, false},
 		{"rejected is terminal", OrderStatusRejected, OrderStatusAccepted, false},
+		{"cancelled is terminal", OrderStatusCancelled, OrderStatusAccepted, false},
 		{"unknown status", OrderStatus("cooking"), OrderStatusReady, false},
 	}
 
@@ -41,8 +46,10 @@ func TestOrderStatusIsValid(t *testing.T) {
 		OrderStatusCreated,
 		OrderStatusAccepted,
 		OrderStatusRejected,
+		OrderStatusCancelled,
 		OrderStatusPreparing,
 		OrderStatusReady,
+		OrderStatusDelivered,
 	}
 
 	for _, status := range valid {
@@ -51,7 +58,7 @@ func TestOrderStatusIsValid(t *testing.T) {
 		}
 	}
 
-	if OrderStatus("delivered").IsValid() {
+	if OrderStatus("refunded").IsValid() {
 		t.Error("unknown status must not be valid")
 	}
 }

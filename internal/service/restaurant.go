@@ -23,9 +23,17 @@ type MenuRepository interface {
 	ListByRestaurant(
 		ctx context.Context,
 		restaurantID string,
+		search string,
 		limit int,
 		offset int,
 	) ([]domain.MenuItem, int, error)
+
+	Search(
+		ctx context.Context,
+		search string,
+		limit int,
+		offset int,
+	) ([]domain.MenuSearchItem, int, error)
 }
 
 type RestaurantService struct {
@@ -61,6 +69,7 @@ func (s *RestaurantService) Get(
 func (s *RestaurantService) Menu(
 	ctx context.Context,
 	restaurantID string,
+	search string,
 	limit int,
 	offset int,
 ) (domain.Restaurant, []domain.MenuItem, int, error) {
@@ -72,6 +81,7 @@ func (s *RestaurantService) Menu(
 	items, total, err := s.menuRepository.ListByRestaurant(
 		ctx,
 		restaurantID,
+		search,
 		limit,
 		offset,
 	)
@@ -80,4 +90,15 @@ func (s *RestaurantService) Menu(
 	}
 
 	return restaurant, items, total, nil
+}
+
+// SearchMenuItems ищет блюда по всей площадке, а не внутри одного
+// заведения: так пользователь находит товар, не открывая меню подряд.
+func (s *RestaurantService) SearchMenuItems(
+	ctx context.Context,
+	search string,
+	limit int,
+	offset int,
+) ([]domain.MenuSearchItem, int, error) {
+	return s.menuRepository.Search(ctx, search, limit, offset)
 }

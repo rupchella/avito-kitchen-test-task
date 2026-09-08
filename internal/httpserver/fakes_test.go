@@ -24,9 +24,17 @@ type fakeRestaurantService struct {
 	menu func(
 		ctx context.Context,
 		restaurantID string,
+		search string,
 		limit int,
 		offset int,
 	) (domain.Restaurant, []domain.MenuItem, int, error)
+
+	searchMenuItems func(
+		ctx context.Context,
+		search string,
+		limit int,
+		offset int,
+	) ([]domain.MenuSearchItem, int, error)
 }
 
 func (f fakeRestaurantService) ListActive(
@@ -47,10 +55,20 @@ func (f fakeRestaurantService) Get(
 func (f fakeRestaurantService) Menu(
 	ctx context.Context,
 	restaurantID string,
+	search string,
 	limit int,
 	offset int,
 ) (domain.Restaurant, []domain.MenuItem, int, error) {
-	return f.menu(ctx, restaurantID, limit, offset)
+	return f.menu(ctx, restaurantID, search, limit, offset)
+}
+
+func (f fakeRestaurantService) SearchMenuItems(
+	ctx context.Context,
+	search string,
+	limit int,
+	offset int,
+) ([]domain.MenuSearchItem, int, error) {
+	return f.searchMenuItems(ctx, search, limit, offset)
 }
 
 type fakeOrderService struct {
@@ -72,6 +90,12 @@ type fakeOrderService struct {
 		limit int,
 		offset int,
 	) ([]domain.Order, int, error)
+
+	cancel func(
+		ctx context.Context,
+		orderID string,
+		userID string,
+	) (domain.Order, error)
 }
 
 func (f fakeOrderService) Create(
@@ -87,6 +111,14 @@ func (f fakeOrderService) Get(
 	userID string,
 ) (domain.Order, error) {
 	return f.get(ctx, orderID, userID)
+}
+
+func (f fakeOrderService) Cancel(
+	ctx context.Context,
+	orderID string,
+	userID string,
+) (domain.Order, error) {
+	return f.cancel(ctx, orderID, userID)
 }
 
 func (f fakeOrderService) List(

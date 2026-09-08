@@ -31,6 +31,12 @@ type OrderRepository interface {
 		limit int,
 		offset int,
 	) ([]domain.Order, int, error)
+
+	CancelByUser(
+		ctx context.Context,
+		orderID string,
+		userID string,
+	) (domain.Order, error)
 }
 
 type OrderMenuRepository interface {
@@ -152,6 +158,16 @@ func (s *OrderService) Get(
 	}
 
 	return order, nil
+}
+
+// Cancel отменяет заказ пользователя. Разрешено только пока заведение
+// не приняло заказ: дальше отмену согласуют с кухней.
+func (s *OrderService) Cancel(
+	ctx context.Context,
+	orderID string,
+	userID string,
+) (domain.Order, error) {
+	return s.orders.CancelByUser(ctx, orderID, userID)
 }
 
 func (s *OrderService) List(

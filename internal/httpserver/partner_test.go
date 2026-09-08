@@ -404,8 +404,13 @@ func TestPartnerHandlerUpdateOrderStatus(t *testing.T) {
 			code:       "validation_error",
 		},
 		{
-			name:       "unknown status",
+			name:       "delivered is allowed",
 			body:       `{"status":"delivered"}`,
+			statusCode: http.StatusOK,
+		},
+		{
+			name:       "unknown status",
+			body:       `{"status":"refunded"}`,
 			statusCode: http.StatusBadRequest,
 			code:       "validation_error",
 		},

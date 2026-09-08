@@ -20,6 +20,7 @@ type fakeOrderRepository struct {
 	getByID             func(ctx context.Context, orderID string) (domain.Order, error)
 	getByIdempotencyKey func(ctx context.Context, userID, key string) (domain.Order, error)
 	listByUser          func(ctx context.Context, userID string, status *domain.OrderStatus, limit, offset int) ([]domain.Order, int, error)
+	cancelByUser        func(ctx context.Context, orderID, userID string) (domain.Order, error)
 }
 
 func (f fakeOrderRepository) Create(
@@ -56,6 +57,14 @@ func (f fakeOrderRepository) ListByUser(
 	offset int,
 ) ([]domain.Order, int, error) {
 	return f.listByUser(ctx, userID, status, limit, offset)
+}
+
+func (f fakeOrderRepository) CancelByUser(
+	ctx context.Context,
+	orderID string,
+	userID string,
+) (domain.Order, error) {
+	return f.cancelByUser(ctx, orderID, userID)
 }
 
 type fakeMenuRepository struct {
@@ -445,5 +454,73 @@ func TestOrderServiceGetHidesForeignOrder(t *testing.T) {
 
 	if !errors.Is(err, domain.ErrOrderNotFound) {
 		t.Fatalf("expected order not found, got %v", err)
+	}
+}
+
+func TestOrderServiceCancelDelegatesToRepository(t *testing.T) {
+	var receivedOrderID, receivedUserID string
+
+	orders := fakeOrderRepository{
+		cancelByUser: func(
+			_ context.Context,
+			orderID string,
+			userID string,
+		) (domain.Order, error) {
+			receivedOrderID = orderID
+			receivedUserID = userID
+
+			return domain.Order{
+				ID:     orderID,
+				UserID: userID,
+				Status: domain.OrderStatusCancelled,
+			}, nil
+		},
+	}
+
+	service := NewOrderService(
+		orders,
+		availableMenu(),
+		fakeRestaurantRepository{},
+	)
+
+	order, err := service.Cancel(t.Context(), "order-1", testUserID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if receivedOrderID != "order-1" || receivedUserID != testUserID {
+		t.Fatalf(
+			"unexpected arguments: %q, %q",
+			receivedOrderID,
+			receivedUserID,
+		)
+	}
+
+	if order.Status != domain.OrderStatusCancelled {
+		t.Errorf("unexpected status: %q", order.Status)
+	}
+}
+
+func TestOrderServiceCancelPropagatesForbiddenTransition(t *testing.T) {
+	orders := fakeOrderRepository{
+		cancelByUser: func(
+			_ context.Context,
+			_ string,
+			_ string,
+		) (domain.Order, error) {
+			return domain.Order{}, domain.ErrOrderStatusForbidden
+		},
+	}
+
+	service := NewOrderService(
+		orders,
+		availableMenu(),
+		fakeRestaurantRepository{},
+	)
+
+	_, err := service.Cancel(t.Context(), "order-1", testUserID)
+
+	if !errors.Is(err, domain.ErrOrderStatusForbidden) {
+		t.Fatalf("expected forbidden transition, got %v", err)
 	}
 }

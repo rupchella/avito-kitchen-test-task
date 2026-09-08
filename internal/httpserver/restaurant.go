@@ -24,9 +24,17 @@ type RestaurantService interface {
 	Menu(
 		ctx context.Context,
 		restaurantID string,
+		search string,
 		limit int,
 		offset int,
 	) (domain.Restaurant, []domain.MenuItem, int, error)
+
+	SearchMenuItems(
+		ctx context.Context,
+		search string,
+		limit int,
+		offset int,
+	) ([]domain.MenuSearchItem, int, error)
 }
 
 type RestaurantHandler struct {
@@ -106,6 +114,13 @@ func (h *RestaurantHandler) Menu(
 		return
 	}
 
+	search, err := parseSearch(request)
+	if err != nil {
+		writeValidationError(writer, err.Error())
+
+		return
+	}
+
 	page, err := parsePagination(request)
 	if err != nil {
 		writeValidationError(writer, err.Error())
@@ -116,6 +131,7 @@ func (h *RestaurantHandler) Menu(
 	restaurant, items, total, err := h.service.Menu(
 		request.Context(),
 		restaurantID,
+		search,
 		page.limit,
 		page.offset,
 	)
@@ -131,6 +147,58 @@ func (h *RestaurantHandler) Menu(
 		Total:      total,
 		Limit:      page.limit,
 		Offset:     page.offset,
+	})
+}
+
+// SearchMenuItems отдаёт блюда со всей площадки: пользователь ищет
+// товар, а не заведение.
+func (h *RestaurantHandler) SearchMenuItems(
+	writer http.ResponseWriter,
+	request *http.Request,
+) {
+	search, err := parseSearch(request)
+	if err != nil {
+		writeValidationError(writer, err.Error())
+
+		return
+	}
+
+	page, err := parsePagination(request)
+	if err != nil {
+		writeValidationError(writer, err.Error())
+
+		return
+	}
+
+	items, total, err := h.service.SearchMenuItems(
+		request.Context(),
+		search,
+		page.limit,
+		page.offset,
+	)
+	if err != nil {
+		writeError(writer, h.logger, "failed to search menu items", err)
+
+		return
+	}
+
+	found := make([]menuSearchItemResponse, 0, len(items))
+
+	for _, item := range items {
+		found = append(found, menuSearchItemResponse{
+			menuItemResponse: newMenuItemResponse(item.MenuItem),
+			Restaurant: restaurantSummaryResponse{
+				ID:   item.RestaurantID,
+				Name: item.RestaurantName,
+			},
+		})
+	}
+
+	writeJSON(writer, http.StatusOK, menuSearchResponse{
+		Items:  found,
+		Total:  total,
+		Limit:  page.limit,
+		Offset: page.offset,
 	})
 }
 
@@ -159,6 +227,24 @@ type menuItemResponse struct {
 	IsAvailable  bool      `json:"is_available"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type restaurantSummaryResponse struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type menuSearchItemResponse struct {
+	menuItemResponse
+
+	Restaurant restaurantSummaryResponse `json:"restaurant"`
+}
+
+type menuSearchResponse struct {
+	Items  []menuSearchItemResponse `json:"items"`
+	Total  int                      `json:"total"`
+	Limit  int                      `json:"limit"`
+	Offset int                      `json:"offset"`
 }
 
 type menuResponse struct {
