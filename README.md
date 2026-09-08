@@ -31,20 +31,7 @@ MVP backend-сервиса доставки еды: пользователи в�
 
 Требуется Docker с плагином Compose.
 
-Все команды в README приведены для bash. На Windows выполняйте их в Git Bash
-или WSL — тогда ничего менять не нужно.
-
-| Команда | bash | PowerShell |
-|---|---|---|
-| `docker compose`, `make`, `go` | работает | работает |
-| однострочный `curl` | работает | замените `curl` на `curl.exe` |
-| многострочный `curl` (переносы через `\`, тело запроса в `-d`) | работает | не работает, выполняйте в Git Bash |
-
-В PowerShell `curl` — это алиас `Invoke-WebRequest`, а не настоящий curl:
-он не понимает `-s` и запрашивает `Uri`. Настоящий curl вызывается как
-`curl.exe` и входит в состав Windows 10 и 11. Переносы строк PowerShell
-обозначает обратным апострофом, а не `\`, поэтому многострочные примеры
-в нём приходится переписывать целиком — проще открыть Git Bash.
+Команды приведены для bash: на Windows выполняйте их в Git Bash, не в PowerShell.
 
 ```bash
 docker compose up --build -d
@@ -64,17 +51,11 @@ curl -s localhost:8080/readyz
 curl -s localhost:8081/healthz
 ```
 
-Оба отвечают одинаково — это значит, что `kitchen` достучался до базы,
-а `restaurant` поднялся:
+Оба отвечают:
 
 ```json
 {"status":"ok"}
 ```
-
-Если `kitchen` возвращает `503` и `{"code":"service_unavailable"}` —
-база ещё не готова или миграции не применились, смотрите
-`docker compose ps -a`: контейнер `migrator` должен быть в состоянии
-`exited (0)`.
 
 Остановка вместе с данными:
 
@@ -100,7 +81,7 @@ curl -s localhost:8080/api/v1/restaurants
   "items": [
     {
       "id": "a1b2c3d4-0000-4000-8000-000000000001",
-      "name": "Пицца у Лены",
+      "name": "AvitoCookRestaurant",
       "status": "active",
       "created_at": "2026-09-08T14:48:21.748464Z",
       "updated_at": "2026-09-08T14:48:21.748464Z"
@@ -112,8 +93,6 @@ curl -s localhost:8080/api/v1/restaurants
 }
 ```
 
-Пустой список означает, что заведение не создалось миграцией.
-
 ```bash
 curl -s localhost:8080/api/v1/restaurants/a1b2c3d4-0000-4000-8000-000000000001/menu
 ```
@@ -124,14 +103,14 @@ curl -s localhost:8080/api/v1/restaurants/a1b2c3d4-0000-4000-8000-000000000001/m
 {
   "restaurant": {
     "id": "a1b2c3d4-0000-4000-8000-000000000001",
-    "name": "Пицца у Лены",
+    "name": "AvitoCookRestaurant",
     "status": "active",
     "created_at": "2026-09-08T14:48:21.748464Z",
     "updated_at": "2026-09-08T14:48:21.748464Z"
   },
   "items": [
     {
-      "id": "1619a0ef-1b47-49e4-84a8-0b88ebb936bf",
+      "id": "a1b2c3d4-0000-4000-8000-000000000002",
       "restaurant_id": "a1b2c3d4-0000-4000-8000-000000000001",
       "external_id": "pizza-margherita",
       "name": "Пицца Маргарита",
@@ -148,13 +127,9 @@ curl -s localhost:8080/api/v1/restaurants/a1b2c3d4-0000-4000-8000-000000000001/m
 }
 ```
 
-Позиций должно быть шесть, из них тирамису — с `"is_available": false`.
-Идентификаторы у вас будут другими: их генерирует база при первой
-синхронизации меню. Если меню пустое, подождите такт опроса (5 секунд):
-заведение ещё не успело его опубликовать.
-
-Возьмите `id` доступной позиции (`"is_available": true`) — он понадобится
-для заказа.
+Позиций шесть, тирамису — с `"is_available": false`. У Маргариты
+идентификатор зафиксирован миграцией, поэтому команды ниже можно выполнять
+как есть; идентификаторы остальных позиций генерирует база.
 
 **2. Пользователь создаёт заказ**
 
@@ -163,13 +138,13 @@ curl -s -X POST localhost:8080/api/v1/orders \
   -H 'Content-Type: application/json' \
   -H 'X-User-ID: 11111111-1111-4111-8111-111111111111' \
   -H 'Idempotency-Key: order-attempt-1' \
-  -d '{
-    "restaurant_id": "a1b2c3d4-0000-4000-8000-000000000001",
-    "delivery_address": "Батуми, улица Пушкина, дом 10, квартира 15",
-    "items": [
-      {"menu_item_id": "<ID позиции из меню>", "quantity": 2}
-    ]
-  }'
+  -d @- <<JSON
+{
+  "restaurant_id": "a1b2c3d4-0000-4000-8000-000000000001",
+  "delivery_address": "Батуми, улица Пушкина, дом 10, квартира 15",
+  "items": [{"menu_item_id": "a1b2c3d4-0000-4000-8000-000000000002", "quantity": 2}]
+}
+JSON
 ```
 
 Ответ — `201 Created`, заголовок `Location` с адресом заказа:
@@ -184,7 +159,7 @@ curl -s -X POST localhost:8080/api/v1/orders \
   "delivery_address": "Батуми, улица Пушкина, дом 10, квартира 15",
   "items": [
     {
-      "menu_item_id": "1619a0ef-1b47-49e4-84a8-0b88ebb936bf",
+      "menu_item_id": "a1b2c3d4-0000-4000-8000-000000000002",
       "item_name": "Пицца Маргарита",
       "unit_price_kopecks": 49900,
       "quantity": 2,
@@ -196,12 +171,10 @@ curl -s -X POST localhost:8080/api/v1/orders \
 }
 ```
 
-Название и цена скопированы в позицию заказа — дальнейшие изменения меню
-на этот заказ уже не влияют.
+Название и цена зафиксированы в позиции заказа.
 
-Повторите тот же запрос — вернётся `200 OK` и **тот же** `id`, второй заказ
-не создастся. Измените в теле `quantity` и повторите ещё раз, не меняя
-`Idempotency-Key`, — получите `409`:
+Повторите тот же запрос — вернётся `200 OK` и тот же `id`. Измените
+`quantity`, не меняя `Idempotency-Key`, — получите `409`:
 
 ```json
 {"code":"idempotency_conflict","message":"idempotency key was used for another order"}
@@ -241,11 +214,11 @@ curl -s -X PATCH localhost:8081/api/v1/menu-items/pizza-margherita/availability 
   -d '{"is_available": false}'
 ```
 
-Ответ — позиция уже с новым флагом:
+Ответ:
 
 ```json
 {
-  "id": "1619a0ef-1b47-49e4-84a8-0b88ebb936bf",
+  "id": "a1b2c3d4-0000-4000-8000-000000000002",
   "restaurant_id": "a1b2c3d4-0000-4000-8000-000000000001",
   "external_id": "pizza-margherita",
   "name": "Пицца Маргарита",
@@ -255,8 +228,7 @@ curl -s -X PATCH localhost:8081/api/v1/menu-items/pizza-margherita/availability 
 }
 ```
 
-Теперь заказ этой позиции (не забудьте новый `Idempotency-Key`) вернёт
-`409`:
+Заказ этой позиции с новым `Idempotency-Key` вернёт `409`:
 
 ```json
 {"code":"menu_item_unavailable","message":"menu item is not available"}
