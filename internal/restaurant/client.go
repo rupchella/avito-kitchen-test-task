@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 type Client struct {
@@ -48,10 +49,11 @@ type MenuItem struct {
 }
 
 type Order struct {
-	ID                string `json:"id"`
-	Status            string `json:"status"`
-	TotalPriceKopecks int64  `json:"total_price_kopecks"`
-	DeliveryAddress   string `json:"delivery_address"`
+	ID                string    `json:"id"`
+	Status            string    `json:"status"`
+	TotalPriceKopecks int64     `json:"total_price_kopecks"`
+	DeliveryAddress   string    `json:"delivery_address"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 type orderListResponse struct {

@@ -49,6 +49,7 @@ func run(logger *slog.Logger) error {
 		logger,
 		menu,
 		cfg.PollInterval,
+		cfg.MinOrderAge,
 		cfg.MaxOrderKopecks,
 	)
 

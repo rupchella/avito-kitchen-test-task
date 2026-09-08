@@ -22,6 +22,7 @@ type Worker struct {
 	logger          *slog.Logger
 	menu            []MenuItemInput
 	interval        time.Duration
+	minOrderAge     time.Duration
 	maxOrderKopecks int64
 	menuSynced      bool
 }
@@ -31,6 +32,7 @@ func NewWorker(
 	logger *slog.Logger,
 	menu []MenuItemInput,
 	interval time.Duration,
+	minOrderAge time.Duration,
 	maxOrderKopecks int64,
 ) *Worker {
 	return &Worker{
@@ -38,6 +40,7 @@ func NewWorker(
 		logger:          logger,
 		menu:            menu,
 		interval:        interval,
+		minOrderAge:     minOrderAge,
 		maxOrderKopecks: maxOrderKopecks,
 	}
 }
@@ -93,6 +96,12 @@ func (w *Worker) processNewOrders(ctx context.Context) {
 	}
 
 	for _, order := range orders {
+		// Заказ какое-то время лежит в очереди, прежде чем кухня его
+		// разберё, чтобы пользователь мог передумать и отменить заказ
+		if time.Since(order.CreatedAt) < w.minOrderAge {
+			continue
+		}
+
 		target := statusAccepted
 
 		if order.TotalPriceKopecks > w.maxOrderKopecks {

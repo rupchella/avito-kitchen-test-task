@@ -9,7 +9,8 @@ const (
 	defaultRestaurantHTTPAddress = ":8081"
 	defaultKitchenBaseURL        = "http://localhost:8080"
 	defaultRestaurantAPIKey      = "demo-restaurant-key"
-	defaultPollInterval          = 15 * time.Second
+	defaultPollInterval          = 30 * time.Second
+	defaultMinOrderAge           = 20 * time.Second
 
 	defaultMaxOrderKopecks = 500_000
 )
@@ -19,6 +20,7 @@ type Restaurant struct {
 	KitchenBaseURL  string
 	APIKey          string
 	PollInterval    time.Duration
+	MinOrderAge     time.Duration
 	MaxOrderKopecks int64
 	RequestTimeout  time.Duration
 	ShutdownTimeout time.Duration
@@ -30,6 +32,7 @@ func LoadRestaurant() Restaurant {
 		KitchenBaseURL:  envOrDefault("KITCHEN_BASE_URL", defaultKitchenBaseURL),
 		APIKey:          envOrDefault("RESTAURANT_API_KEY", defaultRestaurantAPIKey),
 		PollInterval:    durationOrDefault("RESTAURANT_POLL_INTERVAL", defaultPollInterval),
+		MinOrderAge:     durationOrDefault("RESTAURANT_MIN_ORDER_AGE", defaultMinOrderAge),
 		MaxOrderKopecks: int64OrDefault("RESTAURANT_MAX_ORDER_KOPECKS", defaultMaxOrderKopecks),
 		RequestTimeout:  5 * time.Second,
 		ShutdownTimeout: 10 * time.Second,
