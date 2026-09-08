@@ -31,8 +31,6 @@ MVP backend-сервиса доставки еды: пользователи в�
 
 Требуется Docker с плагином Compose.
 
-Команды приведены для bash: на Windows выполняйте их в Git Bash, не в PowerShell.
-
 ```bash
 docker compose up --build -d
 ```
@@ -44,27 +42,12 @@ docker compose up --build -d
 3. `kitchen` — основной API, стартует после успешных миграций;
 4. `restaurant` — сервис заведения, стартует после готовности `kitchen`.
 
-Проверка:
+Всё API собрано в Swagger UI: **http://localhost:8080/docs** — там же
+его можно вызывать. Спецификация отдаётся по http://localhost:8080/openapi.yaml.
 
-```bash
-curl -s localhost:8080/readyz
-curl -s localhost:8081/healthz
-```
-
-Оба отвечают:
-
-```json
-{"status":"ok"}
-```
-
-Интерактивная документация — Swagger UI со всеми ручками:
-
-```
-http://localhost:8080/docs
-```
-
-Ручки можно дёргать прямо оттуда, кнопкой «Try it out». Сама спецификация
-отдаётся по `http://localhost:8080/openapi.yaml`.
+Готовность сервисов видна по двум ссылкам, обе отвечают `{"status":"ok"}`:
+http://localhost:8080/readyz (основной сервис вместе с базой) и
+http://localhost:8081/healthz (сервис заведения).
 
 Остановка вместе с данными:
 
@@ -74,16 +57,23 @@ docker compose down -v
 
 ## Демонстрационный сценарий
 
-Демонстрационное заведение заведено миграцией `00003_seed_demo_restaurant`
-с фиксированным идентификатором `a1b2c3d4-0000-4000-8000-000000000001`.
-Меню оно публикует само: в течение первого такта опроса (по умолчанию 5 секунд)
-сервис `restaurant` отправляет его в `PUT /api/v1/partner/menu`.
+Сценарий целиком проходится в Swagger UI: **http://localhost:8080/docs**.
+У каждой ручки есть кнопка **Try it out** — она открывает поля для параметров,
+**Execute** отправляет запрос.
 
-**1. Пользователь смотрит список заведений и меню**
+Демонстрационное заведение и его меню заводит миграция
+`00003_seed_demo_restaurant`, поэтому идентификаторы известны заранее:
 
-```bash
-curl -s localhost:8080/api/v1/restaurants
-```
+| Что | Значение |
+|---|---|
+| Заведение | `a1b2c3d4-0000-4000-8000-000000000001` |
+| Позиция «Пицца Маргарита» | `a1b2c3d4-0000-4000-8000-000000000002` |
+| Партнёрский ключ заведения | `demo-restaurant-key` |
+| Пользователь (произвольный UUID) | `11111111-1111-4111-8111-111111111111` |
+
+**1. Пользователь смотрит заведения и меню**
+
+`GET /api/v1/restaurants` — вернётся одно активное заведение:
 
 ```json
 {
@@ -102,61 +92,31 @@ curl -s localhost:8080/api/v1/restaurants
 }
 ```
 
-```bash
-curl -s localhost:8080/api/v1/restaurants/a1b2c3d4-0000-4000-8000-000000000001/menu
-```
-
-Ответ содержит заведение и его меню (ниже показана одна позиция из шести):
-
-```json
-{
-  "restaurant": {
-    "id": "a1b2c3d4-0000-4000-8000-000000000001",
-    "name": "AvitoCookRestaurant",
-    "status": "active",
-    "created_at": "2026-09-08T14:48:21.748464Z",
-    "updated_at": "2026-09-08T14:48:21.748464Z"
-  },
-  "items": [
-    {
-      "id": "a1b2c3d4-0000-4000-8000-000000000002",
-      "restaurant_id": "a1b2c3d4-0000-4000-8000-000000000001",
-      "external_id": "pizza-margherita",
-      "name": "Пицца Маргарита",
-      "description": "Томаты, моцарелла, базилик",
-      "price_kopecks": 49900,
-      "is_available": true,
-      "created_at": "2026-09-08T14:48:28.249988Z",
-      "updated_at": "2026-09-08T14:48:28.249988Z"
-    }
-  ],
-  "total": 6,
-  "limit": 20,
-  "offset": 0
-}
-```
-
-Позиций шесть, тирамису — с `"is_available": false`. У Маргариты
-идентификатор зафиксирован миграцией, поэтому команды ниже можно выполнять
-как есть; идентификаторы остальных позиций генерирует база.
+`GET /api/v1/restaurants/{restaurantId}/menu` — подставьте `restaurantId`
+заведения. Вернётся шесть позиций: их публикует сам сервис заведения через
+партнёрское API в первый такт опроса. У тирамису `"is_available": false` —
+заведение держит его в стоп-листе.
 
 **2. Пользователь создаёт заказ**
 
-```bash
-curl -s -X POST localhost:8080/api/v1/orders \
-  -H 'Content-Type: application/json' \
-  -H 'X-User-ID: 11111111-1111-4111-8111-111111111111' \
-  -H 'Idempotency-Key: order-attempt-1' \
-  -d @- <<JSON
+`POST /api/v1/orders`. Заполните два заголовка:
+
+| Поле | Значение |
+|---|---|
+| `X-User-ID` | `11111111-1111-4111-8111-111111111111` |
+| `Idempotency-Key` | `order-attempt-1` |
+
+И тело запроса:
+
+```json
 {
   "restaurant_id": "a1b2c3d4-0000-4000-8000-000000000001",
   "delivery_address": "Батуми, улица Пушкина, дом 10, квартира 15",
   "items": [{"menu_item_id": "a1b2c3d4-0000-4000-8000-000000000002", "quantity": 2}]
 }
-JSON
 ```
 
-Ответ — `201 Created`, заголовок `Location` с адресом заказа:
+Ответ — `201 Created`:
 
 ```json
 {
@@ -180,32 +140,28 @@ JSON
 }
 ```
 
-Название и цена зафиксированы в позиции заказа.
+Название и цена скопированы в позицию заказа: последующие изменения меню
+на уже созданный заказ не влияют. Скопируйте `id` — он нужен на шаге 4.
 
-Повторите тот же запрос — вернётся `200 OK` и тот же `id`. Измените
-`quantity`, не меняя `Idempotency-Key`, — получите `409`:
+**3. Повторный запрос не создаёт второй заказ**
+
+Нажмите **Execute** ещё раз, ничего не меняя, — вернётся `200 OK` и тот же
+`id`. Теперь поменяйте в теле `quantity` на `3`, оставив прежний
+`Idempotency-Key`, — тот же ключ на другой заказ даёт `409`:
 
 ```json
 {"code":"idempotency_conflict","message":"idempotency key was used for another order"}
 ```
 
-**3. Заведение обрабатывает заказ**
+**4. Заведение обрабатывает заказ**
 
-Ничего делать не нужно: сервис `restaurant` сам опрашивает платформу и
-за такт продвигает заказ на один шаг —
-`created → accepted → preparing → ready`.
+Делать ничего не нужно: сервис `restaurant` сам опрашивает платформу и за
+такт продвигает заказ на один шаг — `created → accepted → preparing → ready`.
 Заказ дороже `RESTAURANT_MAX_ORDER_KOPECKS` (по умолчанию 5000 ₽) кухня
 отклоняет: `created → rejected`.
 
-**4. Пользователь следит за статусом**
-
-```bash
-curl -s localhost:8080/api/v1/orders/<ID заказа> \
-  -H 'X-User-ID: 11111111-1111-4111-8111-111111111111'
-```
-
-Поле `status` меняется каждые 5 секунд: `created` → `accepted` →
-`preparing` → `ready`, то есть примерно через 15 секунд заказ готов.
+Следите через `GET /api/v1/orders/{orderId}` с тем же `X-User-ID`: поле
+`status` меняется каждые 5 секунд, примерно через 15 секунд заказ готов.
 Ход обработки виден в логах:
 
 ```bash
@@ -214,16 +170,10 @@ docker compose logs -f restaurant
 
 **5. Стоп-лист заведения**
 
-Собственное API заведения снимает блюдо с продажи и транслирует это
-в платформу:
-
-```bash
-curl -s -X PATCH localhost:8081/api/v1/menu-items/pizza-margherita/availability \
-  -H 'Content-Type: application/json' \
-  -d '{"is_available": false}'
-```
-
-Ответ:
+Партнёрские ручки закрыты ключом. Нажмите **Authorize** вверху страницы,
+введите `demo-restaurant-key` и вызовите
+`PATCH /api/v1/partner/menu-items/{externalId}/availability`
+с `externalId` = `pizza-margherita` и телом `{"is_available": false}`:
 
 ```json
 {
@@ -233,17 +183,23 @@ curl -s -X PATCH localhost:8081/api/v1/menu-items/pizza-margherita/availability 
   "name": "Пицца Маргарита",
   "description": "Томаты, моцарелла, базилик",
   "price_kopecks": 49900,
-  "is_available": false
+  "is_available": false,
+  "created_at": "2026-09-08T16:50:09.627380Z",
+  "updated_at": "2026-09-08T16:53:25.556487Z"
 }
 ```
 
-Заказ этой позиции с новым `Idempotency-Key` вернёт `409`:
+Теперь заказ этой позиции с новым `Idempotency-Key` вернёт `409`:
 
 ```json
 {"code":"menu_item_unavailable","message":"menu item is not available"}
 ```
 
 Вернуть блюдо в продажу — тем же запросом с `{"is_available": true}`.
+
+Ровно это и делает заведение в жизни: у сервиса `restaurant` есть своя ручка
+`PATCH http://localhost:8081/api/v1/menu-items/{externalId}/availability`,
+которая транслирует стоп-лист в платформу тем же партнёрским вызовом.
 
 ## API
 
